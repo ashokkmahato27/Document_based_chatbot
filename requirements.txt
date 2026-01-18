@@ -1,0 +1,31 @@
+# FastAPI and Server
+fastapi==0.115.5
+uvicorn==0.32.1
+python-multipart==0.0.20
+
+# Streamlit
+streamlit==1.40.2
+
+# LangChain
+langchain==0.3.13
+langchain-community==0.3.13
+langchain-groq==0.2.1
+langchain-huggingface==0.1.2
+
+# Vector Store
+faiss-cpu==1.9.0
+
+# Embeddings
+sentence-transformers==3.3.1
+
+# Document Loaders
+pypdf==5.1.0
+docx2txt==0.8
+
+# HTTP Requests
+requests==2.32.3
+
+# Others
+pydantic==2.10.3
+
+python-dotenv
