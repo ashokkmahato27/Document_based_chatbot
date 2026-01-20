@@ -1,247 +1,166 @@
 import streamlit as st
-import requests
-import uuid
+import requests, uuid, json, os
 from datetime import datetime
-import json
-import os
 
-# Configure page
-st.set_page_config(page_title="RAG Chatbot", page_icon="🤖", layout="wide")
-
-# Backend API URL
+# ---------------- CONFIG ----------------
+st.set_page_config("RAG Chatbot", "🤖", layout="wide")
 API_URL = "http://localhost:8000"
-
-# File to save chat sessions
 SESSIONS_FILE = "chat_sessions.json"
 
-# Load saved sessions from file
+# ---------------- HELPERS ----------------
+def now():
+    return datetime.now().isoformat()
+
 def load_sessions():
     if os.path.exists(SESSIONS_FILE):
         try:
-            with open(SESSIONS_FILE, 'r') as f:
-                return json.load(f)
+            return json.load(open(SESSIONS_FILE))
         except:
-            return {}
+            pass
     return {}
 
-# Save sessions to file
-def save_sessions(sessions):
-    with open(SESSIONS_FILE, 'w') as f:
-        json.dump(sessions, f, indent=2)
+def save_sessions():
+    json.dump(st.session_state.sessions, open(SESSIONS_FILE, "w"), indent=2)
 
-# Initialize session state
-if "all_sessions" not in st.session_state:
-    st.session_state.all_sessions = load_sessions()
-
-if "current_session_id" not in st.session_state:
-    st.session_state.current_session_id = str(uuid.uuid4())
-    st.session_state.all_sessions[st.session_state.current_session_id] = {
-        "title": "New Chat",
-        "messages": [],
-        "created_at": datetime.now().isoformat(),
-        "last_updated": datetime.now().isoformat()
-    }
-    save_sessions(st.session_state.all_sessions)
-
-if "document_uploaded" not in st.session_state:
-    st.session_state.document_uploaded = False
-
-# Get current session
-def get_current_session():
-    return st.session_state.all_sessions.get(st.session_state.current_session_id, {
-        "title": "New Chat",
-        "messages": [],
-        "created_at": datetime.now().isoformat(),
-        "last_updated": datetime.now().isoformat()
-    })
-
-# Update session title based on first message
-def update_session_title(session_id, first_message):
-    if session_id in st.session_state.all_sessions:
-        # Create title from first 50 chars of first message
-        title = first_message[:50] + "..." if len(first_message) > 50 else first_message
-        st.session_state.all_sessions[session_id]["title"] = title
-        st.session_state.all_sessions[session_id]["last_updated"] = datetime.now().isoformat()
-        save_sessions(st.session_state.all_sessions)
-
-# Create new chat session
-def create_new_session():
-    new_id = str(uuid.uuid4())
-    st.session_state.all_sessions[new_id] = {
-        "title": "New Chat",
-        "messages": [],
-        "created_at": datetime.now().isoformat(),
-        "last_updated": datetime.now().isoformat()
-    }
-    st.session_state.current_session_id = new_id
-    save_sessions(st.session_state.all_sessions)
+def new_chat():
+    st.session_state.current = str(uuid.uuid4())
+    st.session_state.draft = {"messages": [], "title": "New Chat"}
+    st.session_state.doc_uploaded = False
     st.rerun()
 
-# Switch to a different session
-def switch_session(session_id):
-    st.session_state.current_session_id = session_id
-    st.rerun()
+# ---------------- STATE ----------------
+if "sessions" not in st.session_state:
+    st.session_state.sessions = load_sessions()
 
-# Delete a session
-def delete_session(session_id):
-    if session_id in st.session_state.all_sessions:
-        del st.session_state.all_sessions[session_id]
-        save_sessions(st.session_state.all_sessions)
-        
-        # If deleted current session, create new one
-        if session_id == st.session_state.current_session_id:
-            create_new_session()
-        else:
-            st.rerun()
+for s in st.session_state.sessions.values():
+    s.setdefault("messages", [])
+    s.setdefault("title", "New Chat")
+    s.setdefault("updated", now())
+    s.setdefault("doc_uploaded", False)
 
-# Title
+if "current" not in st.session_state:
+    new_chat()
+if "draft" not in st.session_state:
+    st.session_state.draft = None
+if "doc_uploaded" not in st.session_state:
+    st.session_state.doc_uploaded = False
+
+session = st.session_state.sessions.get(st.session_state.current) or st.session_state.draft
+
+# ---------------- UI ----------------
 st.title("🤖 RAG Document Chatbot")
 
-# Sidebar
+# ---------------- SIDEBAR ----------------
 with st.sidebar:
-    # New Chat Button at top
-    if st.button("➕ New Chat", use_container_width=True, type="primary"):
-        create_new_session()
-    
+    if st.button("➕ New Chat", use_container_width=True):
+        new_chat()
+
     st.divider()
-    
-    # Chat History Section
-    st.header("💬 Chat History")
-    
-    # Sort sessions by last_updated (most recent first)
-    sorted_sessions = sorted(
-        st.session_state.all_sessions.items(),
-        key=lambda x: x[1].get("last_updated", ""),
-        reverse=True
-    )
-    
-    # Display all sessions
-    for session_id, session_data in sorted_sessions:
-        col1, col2 = st.columns([4, 1])
-        
-        with col1:
-            # Highlight current session
-            if session_id == st.session_state.current_session_id:
-                st.markdown(f"**▶️ {session_data['title']}**")
-            else:
-                if st.button(
-                    session_data['title'],
-                    key=f"session_{session_id}",
-                    use_container_width=True
-                ):
-                    switch_session(session_id)
-        
-        with col2:
-            if st.button("🗑️", key=f"delete_{session_id}", help="Delete chat"):
-                delete_session(session_id)
-        
-        # Show message count
-        msg_count = len(session_data.get("messages", []))
-        st.caption(f"{msg_count} messages")
-    
+    st.subheader("💬 Chat History")
+
+    valid_sessions = {sid: s for sid, s in st.session_state.sessions.items() if s["messages"]}
+
+    for sid, data in sorted(valid_sessions.items(), key=lambda x: x[1]["updated"], reverse=True):
+        c1, c2 = st.columns([5, 1])
+        if c1.button(("▶️ " if sid == st.session_state.current else "") + data["title"], key=f"s_{sid}", use_container_width=True):
+            st.session_state.current = sid
+            st.session_state.draft = None
+            st.session_state.doc_uploaded = data.get("doc_uploaded", False)
+            st.rerun()
+        if c2.button("🗑️", key=f"d_{sid}"):
+            del st.session_state.sessions[sid]
+            save_sessions()
+            new_chat()
+        st.caption(f"{len(data['messages'])} messages")
+
     st.divider()
-    
-    # Document Upload Section
-    st.header("📄 Document Upload")
-    
-    uploaded_file = st.file_uploader(
-        "Upload PDF or DOCX",
-        type=["pdf", "docx"],
-        help="Upload a document to chat about"
-    )
-    
-    if uploaded_file:
-        if st.button("Process Document", type="secondary", use_container_width=True):
+    st.subheader("📄 Upload Document")
+
+    file = st.file_uploader("PDF or DOCX", type=["pdf", "docx"])
+    if file and st.button("Process", use_container_width=True):
+        if not st.session_state.current:
+            st.error("No active session!")
+        else:
             with st.spinner("Processing document..."):
-                files = {"file": (uploaded_file.name, uploaded_file, uploaded_file.type)}
                 try:
-                    response = requests.post(f"{API_URL}/upload", files=files)
-                    if response.status_code == 200:
-                        st.session_state.document_uploaded = True
-                        st.success(f"✅ Document processed! ({response.json()['chunks']} chunks)")
+                    r = requests.post(
+                        f"{API_URL}/upload",
+                        params={"session_id": st.session_state.current},
+                        files={"file": (file.name, file, file.type)}
+                    )
+                    try:
+                        res = r.json()
+                    except ValueError:
+                        st.error(f"Upload failed: {r.text}")
+                        res = None
+
+                    if r.status_code == 200 and res:
+                        st.session_state.doc_uploaded = True
+                        session["doc_uploaded"] = True
+                        st.success(f"Processed successfully ({res['chunks']} chunks)")
                     else:
-                        st.error(f"Error: {response.json()['detail']}")
+                        detail = res.get("detail") if res else r.text
+                        st.error(f"Upload failed: {detail}")
                 except Exception as e:
                     st.error(f"Connection error: {str(e)}")
-    
+
     st.divider()
-    
-    # Mode selection
-    st.header("⚙️ Settings")
     mode = st.radio(
         "Answer Mode",
-        ["document_only", "hybrid"],
-        format_func=lambda x: "📄 Document Only" if x == "document_only" else "🌐 Hybrid (Doc + AI)",
-        help="Document Only: Answers only from uploaded document\nHybrid: Uses document + general AI knowledge"
+        ["document_only", "hybrid", "Normal"],
+        format_func=lambda m: {"document_only": "📄 Document Only", "hybrid": "🌐 Hybrid", "Normal": "🧠 Normal"}[m]
     )
-    
-    if not st.session_state.document_uploaded and mode == "document_only":
-        st.warning("⚠️ Please upload a document first")
 
-# Main chat area
-current_session = get_current_session()
+    if mode == "document_only" and not st.session_state.doc_uploaded:
+        st.warning("Upload a document first")
 
-# Display chat history for current session
-for idx, message in enumerate(current_session.get("messages", [])):
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-        if "mode" in message:
-            st.caption(f"Mode: {message['mode']}")
+# ---------------- CHAT HISTORY ----------------
+if session and session.get("messages"):
+    for msg in session["messages"]:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            if "mode" in msg:
+                st.caption(f"Mode: {msg['mode']}")
 
-# Chat input
+# ---------------- CHAT INPUT ----------------
 if prompt := st.chat_input("Ask a question..."):
-    # Check if document is needed
-    if mode == "document_only" and not st.session_state.document_uploaded:
-        st.error("Please upload a document first for document-only mode!")
+    if mode == "document_only" and not st.session_state.doc_uploaded:
+        st.error("Please upload a document first")
     else:
-        # Update session title if this is first message
-        if len(current_session.get("messages", [])) == 0:
-            update_session_title(st.session_state.current_session_id, prompt)
-        
-        # Add user message
-        current_session["messages"].append({"role": "user", "content": prompt})
-        st.session_state.all_sessions[st.session_state.current_session_id] = current_session
-        save_sessions(st.session_state.all_sessions)
-        
+        if st.session_state.current not in st.session_state.sessions:
+            st.session_state.sessions[st.session_state.current] = {
+                "title": prompt[:50],
+                "messages": [],
+                "updated": now(),
+                "doc_uploaded": st.session_state.doc_uploaded,
+            }
+            session = st.session_state.sessions[st.session_state.current]
+            st.session_state.draft = None
+
+        session["messages"].append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
-        
-        # Get bot response
+
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 try:
-                    response = requests.post(
+                    r = requests.post(
                         f"{API_URL}/query",
                         json={
                             "question": prompt,
                             "mode": mode,
-                            "session_id": st.session_state.current_session_id
-                        }
+                            "session_id": st.session_state.current,
+                        },
                     )
-                    
-                    if response.status_code == 200:
-                        answer = response.json()["answer"]
-                        st.markdown(answer)
-                        st.caption(f"Mode: {mode}")
-                        
-                        # Add to messages
-                        current_session["messages"].append({
-                            "role": "assistant",
-                            "content": answer,
-                            "mode": mode
-                        })
-                        
-                        # Update session
-                        current_session["last_updated"] = datetime.now().isoformat()
-                        st.session_state.all_sessions[st.session_state.current_session_id] = current_session
-                        save_sessions(st.session_state.all_sessions)
-                    else:
-                        error_msg = response.json()["detail"]
-                        st.error(f"Error: {error_msg}")
-                
-                except Exception as e:
-                    st.error(f"Connection error: {str(e)}\n\nMake sure the backend is running on http://localhost:8000")
+                    answer = r.json().get("answer", "Error")
+                    st.markdown(answer)
+                    st.caption(f"Mode: {mode}")
 
-# Footer
+                    session["messages"].append({"role": "assistant", "content": answer, "mode": mode})
+                    session["updated"] = now()
+                    save_sessions()
+                except Exception as e:
+                    st.error(f"Connection error: {str(e)}")
+
 st.divider()
-st.caption("Built with Streamlit, LangChain, FastAPI, and Groq")
+st.caption("Built with Streamlit • FastAPI • LangChain • FAISS")

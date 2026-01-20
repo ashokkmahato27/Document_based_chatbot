@@ -1,10 +1,8 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
-import os
 from datetime import datetime
-import json
+import os, uuid
 
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -14,183 +12,147 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from dotenv import load_dotenv
+
 load_dotenv()
 
 app = FastAPI()
-
-# CORS middleware
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
 
-# Global storage
-vectorstore = None
-chat_history = []
-sessions = {}
+# ---------------- SESSION STORE ----------------
+sessions = {}  # session_id → memory, vectorstore, history
 
-# Models
+# ---------------- MODELS ----------------
 class QueryRequest(BaseModel):
     question: str
-    mode: str  # "document_only" or "hybrid"
     session_id: str
+    mode: str = "document_only"
 
 class ChatResponse(BaseModel):
     answer: str
     session_id: str
 
-# Initialize Groq LLM
+# ---------------- HELPERS ----------------
 def get_llm():
-    # Replace with your Groq API key
-    groq_api_key = os.getenv("GROQ_API_KEY")
+    key = os.getenv("GROQ_API_KEY")
+    if not key:
+        raise RuntimeError("GROQ_API_KEY missing")
     return ChatGroq(
-        groq_api_key=groq_api_key,
+        groq_api_key=key,
         model_name="llama-3.1-8b-instant",
-        temperature=0.7
+        temperature=0.6,
     )
 
-# Initialize embeddings
 def get_embeddings():
-    return HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    return HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
 
-@app.post("/upload")
-async def upload_document(file: UploadFile = File(...)):
-    global vectorstore
-    
-    try:
-        # Save uploaded file temporarily
-        file_path = f"temp_{file.filename}"
-        with open(file_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
-        
-        # Load document based on file type
-        if file.filename.endswith('.pdf'):
-            loader = PyPDFLoader(file_path)
-        elif file.filename.endswith('.docx'):
-            loader = Docx2txtLoader(file_path)
-        else:
-            os.remove(file_path)
-            raise HTTPException(status_code=400, detail="Unsupported file format")
-        
-        documents = loader.load()
-        
-        # Split documents
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200
-        )
-        chunks = text_splitter.split_documents(documents)
-        
-        # Create vector store
-        embeddings = get_embeddings()
-        vectorstore = FAISS.from_documents(chunks, embeddings)
-        
-        # Clean up
-        os.remove(file_path)
-        
-        return {"message": "Document uploaded and processed successfully", "chunks": len(chunks)}
-    
-    except Exception as e:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        raise HTTPException(status_code=500, detail=str(e))
+def load_docs(path):
+    ext = path.lower()
+    if ext.endswith(".pdf"):
+        return PyPDFLoader(path).load()
+    if ext.endswith(".docx"):
+        return Docx2txtLoader(path).load()
+    raise HTTPException(400, "Unsupported file type")
 
-@app.post("/query", response_model=ChatResponse)
-async def query_chatbot(request: QueryRequest):
-    global vectorstore, sessions
-    
-    try:
-        llm = get_llm()
-        
-        # Get or create session
-        if request.session_id not in sessions:
-            sessions[request.session_id] = {
-                "history": [],
-                "memory": ConversationBufferMemory(
-                    memory_key="chat_history",
-                    return_messages=True,
-                    output_key="answer"
-                )
-            }
-        
-        session = sessions[request.session_id]
-        
-        if request.mode == "document_only":
-            if vectorstore is None:
-                raise HTTPException(status_code=400, detail="No document uploaded")
-            
-            # Document-only mode with retrieval
-            retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
-            chain = ConversationalRetrievalChain.from_llm(
-                llm=llm,
-                retriever=retriever,
-                memory=session["memory"],
-                return_source_documents=False
-            )
-            
-            response = chain({"question": request.question})
-            answer = response["answer"]
-        
-        else:  # hybrid mode
-            if vectorstore is not None:
-                # Hybrid: Get context from document + general knowledge
-                retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
-                docs = retriever.get_relevant_documents(request.question)
-                context = "\n".join([doc.page_content for doc in docs])
-                
-                prompt = f"""Context from document: {context}
-                
-Question: {request.question}
-
-Please answer using both the document context and your general knowledge."""
-            else:
-                prompt = request.question
-            
-            # Get chat history
-            history_text = "\n".join([f"Human: {h['question']}\nAI: {h['answer']}" 
-                                     for h in session["history"][-3:]])
-            
-            if history_text:
-                full_prompt = f"Previous conversation:\n{history_text}\n\n{prompt}"
-            else:
-                full_prompt = prompt
-            
-            response = llm.invoke(full_prompt)
-            answer = response.content
-        
-        # Store in session history
-        session["history"].append({
-            "question": request.question,
-            "answer": answer,
-            "timestamp": datetime.now().isoformat(),
-            "mode": request.mode
-        })
-        
-        return ChatResponse(answer=answer, session_id=request.session_id)
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/history/{session_id}")
-async def get_history(session_id: str):
+def get_session(session_id: str):
     if session_id not in sessions:
-        return {"history": []}
-    return {"history": sessions[session_id]["history"]}
+        sessions[session_id] = {
+            "memory": ConversationBufferMemory(memory_key="chat_history", return_messages=True),
+            "vectorstore": None,
+            "history": []
+        }
+    return sessions[session_id]
 
+# ---------------- UPLOAD DOCUMENT ----------------
+@app.post("/upload")
+async def upload_document(session_id: str, file: UploadFile = File(...)):
+    session = get_session(session_id)
+
+    ext = file.filename.lower()
+    if not (ext.endswith(".pdf") or ext.endswith(".docx")):
+        raise HTTPException(400, "Only PDF or DOCX supported")
+
+    temp_path = f"tmp_{uuid.uuid4()}_{file.filename}"
+    try:
+        with open(temp_path, "wb") as f:
+            f.write(await file.read())
+
+        docs = load_docs(temp_path)
+        if not docs:
+            raise HTTPException(400, "Document has no readable text")
+
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        chunks = splitter.split_documents(docs)
+        if not chunks:
+            raise HTTPException(400, "Document cannot be split into chunks")
+
+        session["vectorstore"] = FAISS.from_documents(chunks, get_embeddings())
+        return {"message": "Document uploaded successfully", "chunks": len(chunks)}
+
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+# ---------------- QUERY ----------------
+@app.post("/query", response_model=ChatResponse)
+async def query(req: QueryRequest):
+    session = get_session(req.session_id)
+    question = req.question.strip()
+    if not question:
+        raise HTTPException(400, "Empty question not allowed")
+
+    llm = get_llm()
+
+    if req.mode == "document_only":
+        if not session["vectorstore"]:
+            raise HTTPException(400, "No document uploaded for this session")
+        retriever = session["vectorstore"].as_retriever(search_kwargs={"k": 3})
+        chain = ConversationalRetrievalChain.from_llm(
+            llm=llm,
+            retriever=retriever,
+            memory=session["memory"],
+            return_source_documents=False
+        )
+        result = chain({"question": question})
+        answer = result["answer"]
+    else:
+        memory_text = "\n".join(
+            [f"Human: {m['question']}\nAI: {m['answer']}" for m in session["history"][-5:]]
+        )
+        prompt = f"{memory_text}\nHuman: {question}" if memory_text else question
+        answer = llm.invoke(prompt).content
+
+    # Save history
+    session["history"].append({
+        "question": question,
+        "answer": answer,
+        "time": datetime.utcnow().isoformat(),
+        "mode": req.mode
+    })
+
+    return ChatResponse(answer=answer, session_id=req.session_id)
+
+# ---------------- HISTORY ----------------
+@app.get("/history/{session_id}")
+def history(session_id: str):
+    session = get_session(session_id)
+    return session["history"]
+
+# ---------------- DELETE SESSION ----------------
 @app.delete("/session/{session_id}")
-async def clear_session(session_id: str):
-    if session_id in sessions:
-        del sessions[session_id]
-    return {"message": "Session cleared"}
+def delete_session(session_id: str):
+    sessions.pop(session_id, None)
+    return {"message": "Session deleted"}
 
+# ---------------- ROOT ----------------
 @app.get("/")
-async def root():
-    return {"message": "RAG Chatbot API is running"}
+def root():
+    return {"status": "Backend running"}
 
+# ---------------- RUN ----------------
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("backend:app", host="0.0.0.0", port=8000, reload=True)

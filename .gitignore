@@ -2,3 +2,5 @@
 venvi/
 __pycache__/
 venvi 
+chat_sessions.json
+*.json
