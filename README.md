@@ -1,379 +1,260 @@
 # 🤖 RAG Document Chatbot
 
-A simple and powerful RAG (Retrieval-Augmented Generation) chatbot that allows you to chat with your documents using AI. Upload PDF or DOCX files and ask questions with ChatGPT-style interface and persistent chat history!
+A powerful document-based chatbot application that allows users to upload PDF or DOCX files and ask questions about their content using Retrieval-Augmented Generation (RAG). Built with Streamlit, FastAPI, LangChain, and FAISS.
 
 ## ✨ Features
 
-- 📄 **Document Upload**: Support for PDF and DOCX files
-- 🔍 **Two Answer Modes**:
-  - **Document Only**: Answers strictly from uploaded document
-  - **Hybrid**: Combines document knowledge + general AI knowledge
-- 💬 **Chat Memory**: Remembers conversation context
-- 💾 **Persistent Chat History**: ChatGPT-style sidebar with saved conversations
-- 🗂️ **Multiple Sessions**: Create, switch, and manage multiple chat sessions
-- 🗑️ **Delete Chats**: Remove unwanted conversations
-- 📝 **Auto-Naming**: Chats automatically titled from first message
-- 🎨 **Clean UI**: Beautiful Streamlit interface
-- ⚡ **Fast API Backend**: RESTful API with FastAPI
-- 🧠 **Powered by Groq**: Ultra-fast LLM inference
-
-## 🎯 New ChatGPT-Style Features
-
-- **Chat History Sidebar**: All conversations listed in sidebar (most recent first)
-- **Quick Navigation**: Click any chat to switch instantly
-- **New Chat Button**: Create new conversations with one click
-- **Delete Chats**: Remove individual conversations
-- **Message Counter**: See message count for each chat
-- **Current Chat Indicator**: Active chat highlighted with ▶️
-- **Auto-Save**: All chats automatically saved to disk
-- **Persistent Storage**: Chats survive app restarts
+- **Document Upload & Processing**: Support for PDF and DOCX files
+- **Multi-Mode Question Answering**:
+  - 📄 **Document Only**: Answers based solely on uploaded documents
+  - 🌐 **Hybrid**: Combines document knowledge with general AI knowledge
+  - 🧠 **Normal**: Standard conversational AI without document context
+- **Session Management**: Multiple chat sessions with persistent history
+- **Conversation Memory**: Maintains context across messages within a session
+- **Vector Search**: Uses FAISS for efficient semantic search across document chunks
+- **Modern UI**: Clean, responsive interface built with Streamlit
 
 ## 🏗️ Architecture
 
-```
-frontend.py (Streamlit) ←→ backend.py (FastAPI) ←→ Groq API
-       ↓                           ↓
-chat_sessions.json          Vector Store (FAISS)
-```
+### Frontend (Streamlit)
+- User interface for chat interactions
+- Document upload functionality
+- Session management and chat history
+- Real-time communication with FastAPI backend
+
+### Backend (FastAPI)
+- RESTful API endpoints
+- Document processing and chunking
+- Vector storage with FAISS
+- LLM integration via Groq
+- Conversation memory management
 
 ## 📋 Prerequisites
 
-- Python 3.8 or higher
-- Groq API Key (free at [console.groq.com](https://console.groq.com))
+- Python 3.8+
+- Groq API key (for LLM access)
+- pip package manager
 
-## 🚀 Quick Start
+## 🚀 Installation
 
-### 1. Clone/Download the Project
+### 1. Clone the Repository
 
 ```bash
-# Create project directory
-mkdir rag-chatbot
+git clone <your-repo-url>
 cd rag-chatbot
 ```
 
 ### 2. Install Dependencies
 
 ```bash
+pip install streamlit fastapi uvicorn python-multipart
+pip install langchain langchain-community langchain-groq langchain-huggingface
+pip install faiss-cpu sentence-transformers
+pip install pypdf python-docx docx2txt
+pip install python-dotenv pydantic
+```
+
+Or use a requirements.txt file:
+
+```bash
 pip install -r requirements.txt
 ```
 
-### 3. Get Your Groq API Key
+### 3. Set Up Environment Variables
 
-1. Visit [console.groq.com](https://console.groq.com)
+Create a `.env` file in the root directory:
+
+```env
+GROQ_API_KEY=your_groq_api_key_here
+```
+
+To get a Groq API key:
+1. Visit [https://console.groq.com](https://console.groq.com)
 2. Sign up or log in
-3. Navigate to **API Keys** section
-4. Click **Create API Key**
-5. Copy your API key (starts with `gsk_`)
+3. Navigate to API Keys section
+4. Create a new API key
 
-### 4. Set Up API Key
+## 🎮 Usage
 
-**Option A: Environment Variable (Recommended)**
+### Starting the Application
 
-**Linux/Mac:**
-```bash
-export GROQ_API_KEY="gsk_your_actual_api_key_here"
-```
+You need to run both the backend and frontend in separate terminal windows.
 
-**Windows (Command Prompt):**
-```cmd
-set GROQ_API_KEY=gsk_your_actual_api_key_here
-```
+#### Terminal 1 - Start the Backend
 
-**Windows (PowerShell):**
-```powershell
-$env:GROQ_API_KEY="gsk_your_actual_api_key_here"
-```
-
-**Option B: Using .env File**
-
-1. Create a `.env` file in the project root:
-```
-GROQ_API_KEY=gsk_your_actual_api_key_here
-```
-
-2. Install python-dotenv:
-```bash
-pip install python-dotenv
-```
-
-3. Add to top of `backend.py`:
-```python
-from dotenv import load_dotenv
-load_dotenv()
-```
-
-**Option C: Direct in Code (Quick Testing)**
-
-Edit `backend.py` line 45:
-```python
-groq_api_key = "gsk_your_actual_api_key_here"
-```
-
-### 5. Run the Application
-
-**Terminal 1 - Start Backend:**
 ```bash
 python backend.py
 ```
 
-You should see:
-```
-INFO:     Uvicorn running on http://0.0.0.0:8000
-```
+The backend API will start at `http://localhost:8000`
 
-**Terminal 2 - Start Frontend:**
+#### Terminal 2 - Start the Frontend
+
 ```bash
 streamlit run frontend.py
 ```
 
-Your browser will open automatically at `http://localhost:8501`
+The Streamlit app will open automatically in your browser at `http://localhost:8501`
 
-## 📖 How to Use
+### Using the Chatbot
 
-### Managing Chat Sessions
-
-1. **Create New Chat**
-   - Click the "➕ New Chat" button at the top of sidebar
-   - New empty chat session created
-   - Previous chats saved automatically
-
-2. **Switch Between Chats**
-   - Click any chat title in the sidebar
-   - Chat loads instantly with full history
-   - Current chat highlighted with ▶️
-
-3. **Delete Chats**
-   - Click the 🗑️ button next to any chat
-   - Chat permanently removed
-   - Auto-creates new chat if you delete current one
-
-4. **View Chat Details**
-   - Each chat shows its title and message count
-   - Sorted by most recent activity
-
-### Chatting with Documents
-
-1. **Upload Document**
-   - Click "Browse files" in the sidebar
+1. **Upload a Document**:
+   - Click on the file uploader in the sidebar
    - Select a PDF or DOCX file
-   - Click "Process Document"
-   - Wait for confirmation
+   - Click "Process" to upload and process the document
 
-2. **Choose Mode**
-   - **Document Only**: AI answers only from your document
-   - **Hybrid**: AI uses document + its general knowledge
+2. **Select Answer Mode**:
+   - **Document Only**: Get answers exclusively from your uploaded document
+   - **Hybrid**: Combine document context with general knowledge
+   - **Normal**: Use general AI knowledge without document context
 
-3. **Start Chatting**
-   - Type your question in the chat input
-   - Press Enter
-   - Get instant answers!
-   - First message becomes chat title automatically
+3. **Ask Questions**:
+   - Type your question in the chat input at the bottom
+   - Press Enter to submit
+   - View the AI's response with the selected mode indicator
 
-## 🗂️ Project Structure
+4. **Manage Sessions**:
+   - Click "➕ New Chat" to start a fresh conversation
+   - Switch between previous chats by clicking them in the sidebar
+   - Delete unwanted sessions with the 🗑️ button
+
+## 📁 Project Structure
 
 ```
 rag-chatbot/
-├── backend.py              # FastAPI backend server
-├── frontend.py             # Streamlit frontend UI with chat history
-├── requirements.txt        # Python dependencies
-├── chat_sessions.json      # Auto-created: Stores all chat sessions
-├── README.md              # This file
-└── .env                   # API keys (create this)
-```
-
-### chat_sessions.json Format
-
-```json
-{
-  "session-id-1": {
-    "title": "What is machine learning?",
-    "messages": [
-      {"role": "user", "content": "What is machine learning?"},
-      {"role": "assistant", "content": "Machine learning is...", "mode": "hybrid"}
-    ],
-    "created_at": "2024-01-18T10:30:00",
-    "last_updated": "2024-01-18T10:35:00"
-  }
-}
+├── frontend.py              # Streamlit UI application
+├── backend.py               # FastAPI server
+├── .env                     # Environment variables (create this)
+├── chat_sessions.json       # Persistent chat history (auto-generated)
+├── requirements.txt         # Python dependencies
+└── README.md               # This file
 ```
 
 ## 🔧 Configuration
 
-### Change LLM Model
+### Backend Configuration
 
-Edit `backend.py` line 47:
-```python
-model_name="llama-3.1-70b-versatile"  # Try: llama-3.3-70b-versatile, mixtral-8x7b-32768
+Edit `backend.py` to customize:
+
+- **LLM Model**: Change `model_name` in `get_llm()` function
+- **Chunk Size**: Modify `chunk_size` and `chunk_overlap` in the splitter
+- **Temperature**: Adjust LLM creativity (0.0-1.0)
+- **Retrieval Results**: Change `k` value in retriever configuration
+
+### Frontend Configuration
+
+Edit `frontend.py` to customize:
+
+- **API URL**: Change `API_URL` if backend runs on different host/port
+- **Page Title**: Modify `st.set_page_config()` parameters
+- **Session Storage**: Change `SESSIONS_FILE` path
+
+## 🛠️ API Endpoints
+
+### POST `/upload`
+Upload and process a document for a session.
+
+**Parameters**:
+- `session_id` (query): Session identifier
+- `file` (form-data): PDF or DOCX file
+
+**Response**:
+```json
+{
+  "message": "Document uploaded successfully",
+  "chunks": 42
+}
 ```
 
-### Adjust Chunk Size
+### POST `/query`
+Ask a question to the chatbot.
 
-Edit `backend.py` lines 73-74:
-```python
-chunk_size=1000,      # Larger = more context
-chunk_overlap=200     # Overlap between chunks
+**Request Body**:
+```json
+{
+  "question": "What is the main topic?",
+  "session_id": "abc-123",
+  "mode": "document_only"
+}
 ```
 
-### Change Retrieval Documents
-
-Edit `backend.py` line 114:
-```python
-search_kwargs={"k": 3}  # Number of document chunks to retrieve
+**Response**:
+```json
+{
+  "answer": "The main topic is...",
+  "session_id": "abc-123"
+}
 ```
 
-### Modify Chat Title Length
+### GET `/history/{session_id}`
+Retrieve conversation history for a session.
 
-Edit `frontend.py` line 57:
-```python
-title = first_message[:50] + "..."  # Change 50 to desired length
+### DELETE `/session/{session_id}`
+Delete a session and its data.
+
+## 🧪 Technologies Used
+
+- **Frontend**: Streamlit
+- **Backend**: FastAPI
+- **LLM**: Groq (Llama 3.1 8B)
+- **Embeddings**: HuggingFace (all-MiniLM-L6-v2)
+- **Vector Store**: FAISS
+- **Framework**: LangChain
+- **Document Processing**: PyPDF, python-docx
+
+## 📝 Requirements.txt
+
+```txt
+streamlit>=1.28.0
+fastapi>=0.104.0
+uvicorn>=0.24.0
+python-multipart>=0.0.6
+langchain>=0.1.0
+langchain-community>=0.0.10
+langchain-groq>=0.0.1
+langchain-huggingface>=0.0.1
+faiss-cpu>=1.7.4
+sentence-transformers>=2.2.2
+pypdf>=3.17.0
+python-docx>=1.1.0
+docx2txt>=0.8
+python-dotenv>=1.0.0
+pydantic>=2.5.0
 ```
 
 ## 🐛 Troubleshooting
 
-### Error: "Invalid API Key"
-- Make sure you've set the `GROQ_API_KEY` environment variable
-- Verify your API key is correct and active
-- Restart the backend after setting the key
-
-### Error: "Connection error"
-- Ensure backend is running on `http://localhost:8000`
+### Backend won't start
+- Ensure GROQ_API_KEY is set in `.env` file
 - Check if port 8000 is available
-- Try restarting both backend and frontend
+- Verify all dependencies are installed
 
-### Error: "No document uploaded"
-- Upload a document before using "Document Only" mode
-- Or switch to "Hybrid" mode to chat without a document
+### Document upload fails
+- Check file format (only PDF and DOCX supported)
+- Ensure the document contains readable text
+- Check backend logs for specific errors
 
-### Chat History Not Saving
-- Check if `chat_sessions.json` file is created in project folder
-- Ensure you have write permissions in the directory
-- Check console for any JSON serialization errors
-
-### Chat History Not Loading
-- Verify `chat_sessions.json` is valid JSON
-- Delete the file to reset (backup first if needed)
-- Restart Streamlit frontend
-
-### FAISS Installation Issues (Windows)
-```bash
-# Try with no cache
-pip install faiss-cpu --no-cache
-
-# Or use conda
-conda install -c conda-forge faiss-cpu
-```
-
-## 📚 API Endpoints
-
-### POST /upload
-Upload and process a document
-```bash
-curl -X POST "http://localhost:8000/upload" \
-  -F "file=@document.pdf"
-```
-
-### POST /query
-Ask a question
-```bash
-curl -X POST "http://localhost:8000/query" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "question": "What is this document about?",
-    "mode": "document_only",
-    "session_id": "session123"
-  }'
-```
-
-### GET /history/{session_id}
-Get chat history
-```bash
-curl "http://localhost:8000/history/session123"
-```
-
-### DELETE /session/{session_id}
-Clear session
-```bash
-curl -X DELETE "http://localhost:8000/session/session123"
-```
-
-## 🛠️ Technology Stack
-
-- **Frontend**: Streamlit
-- **Backend**: FastAPI
-- **LLM**: Groq (Llama 3.1)
-- **Embeddings**: HuggingFace (sentence-transformers)
-- **Vector Store**: FAISS
-- **Framework**: LangChain
-- **Document Processing**: PyPDF, docx2txt
-- **Storage**: JSON file-based persistence
-
-## 📝 License
-
-MIT License - feel free to use this project however you want!
+### Connection error in frontend
+- Verify backend is running on `http://localhost:8000`
+- Check API_URL configuration in frontend.py
+- Ensure no firewall blocking local connections
 
 ## 🤝 Contributing
 
-Contributions are welcome! Feel free to:
-- Report bugs
-- Suggest features
-- Submit pull requests
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-## 💡 Tips
+## 📄 License
 
-- **Chat Management**: Regularly delete old chats to keep sidebar clean
-- **Document Quality**: Well-structured documents give better results
-- **Mode Selection**: 
-  - Use "Document Only" for factual questions about your document
-  - Use "Hybrid" mode for questions needing broader context
-- **Session Persistence**: All chats are saved automatically - no need to manually save
-- **Chat Titles**: First message becomes title - make it descriptive!
-- **Performance**: Documents are stored in memory (restart clears them)
-- **Backup**: Periodically backup `chat_sessions.json` to save your conversations
+This project is open source and available under the MIT License.
 
-## 🎯 Future Enhancements
+## 🙏 Acknowledgments
 
-- [ ] Search within chat history
-- [ ] Export individual chats to PDF/TXT
-- [ ] Folder organization for chats
-- [ ] Multiple document support per chat
-- [ ] Persistent document storage
-- [ ] User authentication
-- [ ] Share chats via link
-- [ ] Support for more file types (TXT, CSV, etc.)
-- [ ] Cloud storage integration
-- [ ] Deploy to cloud (AWS, GCP, Azure)
-
-## 📊 Chat Storage Details
-
-### Storage Location
-- All chats saved in `chat_sessions.json` in project root
-- Human-readable JSON format
-- Automatic backup on each save
-
-### Data Structure
-Each session contains:
-- **title**: Auto-generated from first message
-- **messages**: Full conversation history
-- **created_at**: Session creation timestamp
-- **last_updated**: Last activity timestamp
-
-### Privacy & Security
-- All data stored locally on your machine
-- No cloud storage or external servers
-- Delete `chat_sessions.json` to clear all history
-- Backend API sessions are separate from frontend storage
-
-## 📞 Support
-
-If you encounter any issues:
-1. Check the troubleshooting section
-2. Verify all dependencies are installed
-3. Ensure your API key is valid
-4. Check backend logs for errors
-5. Verify `chat_sessions.json` is valid JSON
+- Built with [Streamlit](https://streamlit.io/)
+- Powered by [FastAPI](https://fastapi.tiangolo.com/)
+- Uses [LangChain](https://www.langchain.com/) framework
+- LLM by [Groq](https://groq.com/)
+- Vector search by [FAISS](https://github.com/facebookresearch/faiss)
 
 ---
 
-**Built with ❤️ using Streamlit, LangChain, FastAPI, and Groq**
-
-Happy chatting with persistent history! 🚀💬
+**Built with ❤️ using Streamlit • FastAPI • LangChain • FAISS**
