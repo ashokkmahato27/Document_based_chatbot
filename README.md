@@ -83,7 +83,7 @@ You need to run both the backend and frontend in separate terminal windows.
 #### Terminal 1 - Start the Backend
 
 ```bash
-python backend.py
+uvicorn backend:app --reload
 ```
 
 The backend API will start at `http://localhost:8000`
@@ -122,7 +122,7 @@ The Streamlit app will open automatically in your browser at `http://localhost:8
 
 ```
 rag-chatbot/
-├── frontend.py              # Streamlit UI application
+├── app.py                   # Streamlit UI application
 ├── backend.py               # FastAPI server
 ├── .env                     # Environment variables (create this)
 ├── chat_sessions.json       # Persistent chat history (auto-generated)
